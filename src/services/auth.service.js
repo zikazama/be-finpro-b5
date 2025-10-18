@@ -1,9 +1,9 @@
-const { cashierModel, sequelize } = require("../models");
+const { cashierModel } = require("../models");
 const { hashPassword, comparePassword } = require("../lib/hashPassword");
 const { authSchema } = require("../lib/validation/auth.schema");
 const jwt = require("jsonwebtoken");
-const { v4: uuidv4 } = require('uuid');
-const { Op } = require('sequelize');
+const { v4: uuidv4 } = require("uuid");
+const { Op } = require("sequelize");
 
 const login = async (req, res) => {
   const { error } = authSchema.validate(req.body);
@@ -17,7 +17,10 @@ const login = async (req, res) => {
     where: { username: req.body.username },
   });
 
-  if (!cashier || !(await comparePassword(req.body.password, cashier.password))) {
+  if (
+    !cashier ||
+    !(await comparePassword(req.body.password, cashier.password))
+  ) {
     return res
       .status(401)
       .json({ status: "error", message: "Username or password not match!" });
@@ -53,7 +56,8 @@ const register = async (req, res) => {
     if (!username || !email || !password || !confirmPassword) {
       return res.status(400).json({
         status: "error",
-        message: "All fields are required: username, email, password, confirmPassword"
+        message:
+          "All fields are required: username, email, password, confirmPassword",
       });
     }
 
@@ -61,24 +65,21 @@ const register = async (req, res) => {
     if (password !== confirmPassword) {
       return res.status(400).json({
         status: "error",
-        message: "Password and confirm password do not match"
+        message: "Password and confirm password do not match",
       });
     }
 
     // Check if username or email already exists
     const existingCashier = await cashierModel.findOne({
       where: {
-        [Op.or]: [
-          { username: username },
-          { email: email }
-        ]
-      }
+        [Op.or]: [{ username: username }, { email: email }],
+      },
     });
 
     if (existingCashier) {
       return res.status(409).json({
         status: "error",
-        message: "Username or email already exists"
+        message: "Username or email already exists",
       });
     }
 
@@ -91,9 +92,9 @@ const register = async (req, res) => {
       username,
       email,
       password: hashedPassword,
-      status: 'active',
+      status: "active",
       created_at: new Date(),
-      updated_at: new Date()
+      updated_at: new Date(),
     });
 
     res.status(201).json({
@@ -102,16 +103,41 @@ const register = async (req, res) => {
       data: {
         uuid: newCashier.uuid,
         username: newCashier.username,
-        email: newCashier.email
-      }
+        email: newCashier.email,
+      },
     });
   } catch (error) {
     console.error("Registration error:", error);
     res.status(500).json({
       status: "error",
-      message: "Internal server error"
+      message: "Internal server error",
     });
   }
 };
 
-module.exports = { login, register };
+const checkEmailExists = async (req, res) => {
+  const cashier = await cashierModel.findOne({
+    where: { email: req.body.email },
+  });
+  return res.status(200).json({
+    status: "success",
+    data: cashier ? { exists: true } : { exists: false },
+  });
+};
+
+const resetPassword = async (req, res) => {
+  const cashier = await cashierModel.findOne({ where: { email: req.body.email } });
+  if (!cashier) {
+    throw new Error("Email not found");
+  }
+
+  const hashedPassword = await hashPassword(req.body.newPassword);
+  cashier.password = hashedPassword;
+  await cashier.save();
+  return res.status(200).json({
+    status: "success",
+    message: "Password reset successful",
+  });
+};
+
+module.exports = { login, register, checkEmailExists, resetPassword };
